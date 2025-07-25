@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace vPilot_Pushover.Drivers {
     internal class Telegram : INotifier {
@@ -12,6 +13,9 @@ namespace vPilot_Pushover.Drivers {
         private static readonly HttpClient client = new HttpClient();
         private String settingTelegramBotToken = null;
         private String settingTelegramChatId = null;
+
+        // Event for received commands
+        public event Action<string> OnCommandReceived;
 
         /*
          * 
@@ -59,5 +63,37 @@ namespace vPilot_Pushover.Drivers {
             var responseString = await response.Content.ReadAsStringAsync();
         }
 
+        /*
+         * 
+         * Long polling for Telegram messages
+         *
+        */
+        public async Task StartLongPollingAsync()
+        {
+            if (!hasValidConfig()) return;
+
+            int offset = 0;
+            while (true)
+            {
+                string url = $"https://api.telegram.org/bot{settingTelegramBotToken}/getUpdates?timeout=30&offset={offset}";
+                var response = await client.GetAsync(url);
+                var json = await response.Content.ReadAsStringAsync();
+
+                var updates = JObject.Parse(json)["result"];
+                foreach (var update in updates)
+                {
+                    offset = (int)update["update_id"] + 1;
+                    var message = update["message"];
+                    if (message != null && message["text"] != null)
+                    {
+                        string text = message["text"].ToString();
+                        OnCommandReceived?.Invoke(text);
+                    }
+                }
+
+                // Throttle the requests to avoid hitting the API limits
+                await Task.Delay(1000);
+            }
+        }
     }
 }

@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.Win32;
-
+﻿using Microsoft.Win32;
 using RossCarlson.Vatsim.Vpilot.Plugins;
 using RossCarlson.Vatsim.Vpilot.Plugins.Events;
+using RossCarlson.Vatsim.Vpilot.Plugins.Exceptions;
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace vPilot_Pushover {
     public class Main : IPlugin {
@@ -32,6 +33,7 @@ namespace vPilot_Pushover {
         private Boolean settingSelcalEnabled = false;
         private Boolean settingHoppieEnabled = false;
         private Boolean settingDisconnectEnabled = false;
+        private Boolean settingSendEnabled = false;
         public String settingHoppieLogon = null;
         private String settingPushoverToken = null;
         private String settingPushoverUser = null;
@@ -40,6 +42,16 @@ namespace vPilot_Pushover {
         private String settingTelegramChatId = null;
         private String settingGotifyUrl = null;
         private String settingGotifyToken = null;
+
+        private enum PendingCommand
+        {
+            None,
+            AwaitingConnParams,
+            AwaitingMsgText,
+            AwaitingRespText
+        }
+        private PendingCommand pendingCommand = PendingCommand.None;
+        private string lastPrivateMessageCallsign = null;
 
         /*
          * 
@@ -119,7 +131,35 @@ namespace vPilot_Pushover {
                     acars.init(this, notifier, settingHoppieLogon);
                 }
 
-                notifier.sendMessage($"Connected. Running version v{version}");
+                // After initializing subscribe to command events
+                if (notifier is Drivers.Telegram telegramNotifier)
+                {
+                    telegramNotifier.OnCommandReceived += (msg) =>
+                    {
+                        if (settingSendEnabled)
+                        {
+                            respond(msg);
+                        } else
+                        {
+                            notifier.sendMessage("Command sending is disabled. Please enable the 'Send' option in your vPilot-Pushover.ini to use this feature.");
+                        }
+                        sendDebug(msg);
+                    };
+
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await telegramNotifier.StartLongPollingAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            sendDebug($"Polling failed: {ex.Message}");
+                        }
+                    });
+                }
+
+                notifier.sendMessage($"👋  Connected. Running version v{version}");
                 sendDebug($"vPilot Pushover connected and enabled on v{version}");
 
                 updateChecker();
@@ -141,6 +181,88 @@ namespace vPilot_Pushover {
 
         /*
          * 
+         * Request network connection
+         *
+        */
+        public void requestConnection(String callsign, String typeCode, String selcalCode)
+        {
+            try
+            {
+                vPilot.RequestConnect(callsign, typeCode, selcalCode);
+                notifier.sendMessage("🔄  Connecting ...");
+            }
+            catch (SimNotReadyException ex)
+            {
+                notifier.sendMessage("❌  Cannot connect: Simulator is not ready.");
+                sendDebug("Cannot connect: Simulator is not ready. " + ex.Message);
+            }
+            catch (AlreadyConnectedException ex)
+            {
+                notifier.sendMessage("❌  Cannot connect: Already connected.");
+                sendDebug("Cannot connect: Already connected. " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                notifier.sendMessage("❌  Cannot connect: Unknown error during connect.");
+                sendDebug("Unknown error during connect: " + ex.Message);
+            }
+        }
+
+        /*
+         * 
+         * Request network disconnection
+         *
+        */
+        public void requestDisconnection()
+        {
+            try
+            {
+                vPilot.RequestDisconnect();
+                notifier.sendMessage("🔄  Disconnecting ...");
+            }
+            catch (NotConnectedException ex)
+            {
+                notifier.sendMessage("❌  Cannot disconnect: Not connected to the network.");
+                sendDebug("Cannot disconnect: Not connected to the network. " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                notifier.sendMessage("❌  Cannot disconnect: Unknown error during connect.");
+                sendDebug("Unknown error during disconnect: " + ex.Message);
+            }
+        }
+
+        /*
+         * 
+         * Send private message
+         *
+        */
+        public void sendPrivateMessage(String callsign, String message)
+        {
+            try
+            {
+                vPilot.SendPrivateMessage(callsign, message);
+                notifier.sendMessage("📨  Message sent!");
+            }
+            catch (NotConnectedException ex)
+            {
+                notifier.sendMessage("❌  Cannot send private message: Not connected to the network.");
+                sendDebug("Cannot send private message: Not connected to the network. " + ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                notifier.sendMessage("❌  Cannot send private message: Invalid callsign or message.");
+                sendDebug("Cannot send private message: Invalid callsign or message. " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                notifier.sendMessage("❌  Cannot send private message: " + ex.Message);
+                sendDebug("Error sending private message: " + ex.Message);
+            }
+        }
+
+        /*
+         * 
          * Hook: Network connected
          *
         */
@@ -150,6 +272,8 @@ namespace vPilot_Pushover {
             if (settingHoppieEnabled) {
                 acars.start();
             }
+
+            notifier.sendMessage("✅  Connected!", "", 1);
         }
         /*
          * 
@@ -164,7 +288,7 @@ namespace vPilot_Pushover {
             }
 
             if (settingDisconnectEnabled) {
-                notifier.sendMessage("Disconnected from network", "vPilot", 1);
+                notifier.sendMessage("✅  Disconnected!", "", 1);
             }
         }
 
@@ -176,7 +300,8 @@ namespace vPilot_Pushover {
         private void onPrivateMessageReceivedHandler( object sender, PrivateMessageReceivedEventArgs e ) {
             string from = e.From;
             string message = e.Message;
-            notifier.sendMessage(message, from, 1);
+            lastPrivateMessageCallsign = from; // Store for /resp
+            notifier.sendMessage($"💬 {from}: {message}", "", 1);
         }
 
         /*
@@ -231,6 +356,7 @@ namespace vPilot_Pushover {
                 settingTelegramBotToken = settingsFile.KeyExists("BotToken", "Telegram") ? settingsFile.Read("BotToken", "Telegram") : null;
                 settingTelegramChatId = settingsFile.KeyExists("ChatId", "Telegram") ? settingsFile.Read("ChatId", "Telegram") : null;
                 settingDisconnectEnabled = settingsFile.KeyExists("Enabled", "Disconnect") ? Boolean.Parse(settingsFile.Read("Enabled", "Disconnect")) : false;
+                settingSendEnabled = settingsFile.KeyExists("Enabled", "Send") ? Boolean.Parse(settingsFile.Read("Enabled", "Send")) : false;
                 settingGotifyUrl = settingsFile.KeyExists("Url", "Gotify") ? settingsFile.Read("Url", "Gotify") : null;
                 settingGotifyToken = settingsFile.KeyExists("Token", "Gotify") ? settingsFile.Read("Token", "Gotify") : null;
 
@@ -275,6 +401,97 @@ namespace vPilot_Pushover {
 
         }
 
+        public void respond( String msg )
+        {
+            // Handle follow-up for multi-step commands
+            if (pendingCommand == PendingCommand.AwaitingConnParams)
+            {
+                var parts = msg.Split(':');
+                if (parts.Length >= 2)
+                {
+                    string callsign = parts[0];
+                    string typeCode = parts[1];
+                    string selcalCode = parts.Length >= 3 ? parts[2] : "";
+                    requestConnection(callsign, typeCode, selcalCode);
+                    pendingCommand = PendingCommand.None;
+                }
+                else
+                {
+                    notifier.sendMessage("Invalid format. Enter: <callsign>:<typecode>:[<selcalcode>]");
+                }
+                return;
+            }
+            else if (pendingCommand == PendingCommand.AwaitingMsgText)
+            {
+                // Expecting format: CALLSIGN: message text
+                int colonIndex = msg.IndexOf(':');
+                if (colonIndex > 0)
+                {
+                    string callsign = msg.Substring(0, colonIndex).Trim();
+                    string message = msg.Substring(colonIndex + 1).Trim();
+                    if (!string.IsNullOrEmpty(callsign) && !string.IsNullOrEmpty(message))
+                    {
+                        sendPrivateMessage(callsign, message);
+                        pendingCommand = PendingCommand.None;
+                    }
+                    else
+                    {
+                        notifier.sendMessage("Invalid format. Enter: <callsign>: <message>");
+                    }
+                }
+                else
+                {
+                    notifier.sendMessage("Invalid format. Enter: <callsign>: <message>");
+                }
+                return;
+            }
+            else if (pendingCommand == PendingCommand.AwaitingRespText)
+            {
+                if (!string.IsNullOrEmpty(lastPrivateMessageCallsign))
+                {
+                    sendPrivateMessage(lastPrivateMessageCallsign, msg);
+                }
+                else
+                {
+                    notifier.sendMessage("❌  No previous private message to respond to.");
+                }
+                pendingCommand = PendingCommand.None;
+                return;
+            }
+
+            // Handle initial commands
+            if (msg.StartsWith("/conn", StringComparison.OrdinalIgnoreCase))
+            {
+                notifier.sendMessage("Enter: <callsign>:<typecode>:[<selcalcode>]");
+                pendingCommand = PendingCommand.AwaitingConnParams;
+            }
+            else if (msg.StartsWith("/disc", StringComparison.OrdinalIgnoreCase))
+            {
+                requestDisconnection();
+            }
+            else if (msg.StartsWith("/msg", StringComparison.OrdinalIgnoreCase))
+            {
+                notifier.sendMessage("Enter: <callsign>: <message>");
+                pendingCommand = PendingCommand.AwaitingMsgText;
+            }
+            else if (msg.StartsWith("/resp", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(lastPrivateMessageCallsign))
+                {
+                    notifier.sendMessage($"Responding to {lastPrivateMessageCallsign} enter: <message>");
+                    pendingCommand = PendingCommand.AwaitingRespText;
+                }
+                else
+                {
+                    notifier.sendMessage("❌  No previous private message to respond to.");
+                    pendingCommand = PendingCommand.None;
+                }
+            }
+            else
+            {
+                notifier.sendMessage("❗  Unknown command");
+            }
+        }
 
     }
 }
