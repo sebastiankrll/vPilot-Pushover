@@ -66,6 +66,9 @@ In the `vPilot-Pushover.ini` file, you can configure the following settings:
 ### [Disconnect]
 `Enabled`= Whether or not to send message when disconneted from network. Set to `true` or `false`
 
+### [Send]
+`Enabled`= Whether or not to enable remote control of vPilot (Telegram only). Set to `true` or `false`
+
 ## Troubleshooting
 ### I don't receive any connected notification
 - Make sure you have placed the plugin in the correct folder, usually like this `C:\Users\<your username>\AppData\Local\vPilot\Plugins\vPilot-Pushover.dll` and `.ini` in the same folder.
