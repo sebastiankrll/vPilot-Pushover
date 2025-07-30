@@ -11,19 +11,19 @@ namespace vPilot_Pushover.Drivers
     {
 
         // Init
-        private static readonly HttpClient client = new HttpClient();
-        private String settingGotifyUrl = null;
-        private String settingGotifyToken = null;
+        private static readonly HttpClient s_client = new HttpClient();
+        private string _settingGotifyUrl = null;
+        private string _settingGotifyToken = null;
 
         /*
          * 
          * Initilise the driver
          *
         */
-        public void init(NotifierConfig config)
+        public void Init(NotifierConfig config)
         {
-            this.settingGotifyUrl = config.settingGotifyUrl;
-            this.settingGotifyToken = config.settingGotifyToken;
+            _settingGotifyUrl = config.SettingGotifyUrl;
+            _settingGotifyToken = config.SettingGotifyToken;
         }
 
         /*
@@ -31,9 +31,9 @@ namespace vPilot_Pushover.Drivers
          * Validate the configuration
          *
         */
-        public Boolean hasValidConfig()
+        public bool HasValidConfig()
         {
-            if (this.settingGotifyUrl == null || this.settingGotifyToken == null)
+            if (_settingGotifyUrl == null || _settingGotifyToken == null)
             {
                 return false;
             }
@@ -45,8 +45,7 @@ namespace vPilot_Pushover.Drivers
          * Send Pushover message
          *
         */
-
-        public async void sendMessage(String text, String emoji = "", String title = "", int priority = 0)
+        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0)
         {
             var values = new Dictionary<string, string>
             {
@@ -55,9 +54,8 @@ namespace vPilot_Pushover.Drivers
                 { "priority", priority.ToString() }
             };
 
-            var response = await client.PostAsync(this.settingGotifyUrl + "/message?token=" + this.settingGotifyToken, new FormUrlEncodedContent(values));
+            var response = await s_client.PostAsync(_settingGotifyUrl + "/message?token=" + _settingGotifyToken, new FormUrlEncodedContent(values));
             var responseString = await response.Content.ReadAsStringAsync();
         }
-
     }
 }

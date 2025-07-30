@@ -4,28 +4,31 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Timers;
 
-namespace vPilot_Pushover {
-    internal class Acars {
+namespace vPilot_Pushover
+{
+    internal class Acars
+    {
 
         // Init
-        private static Main Plugin;
-        private static INotifier notifier;
-        private static List<Dictionary<string, string>> hoppieCache = new List<Dictionary<string, string>>();
-        private static Boolean cacheLoaded = false;
+        private static Main s_plugin;
+        private static INotifier s_notifier;
+        private static List<Dictionary<string, string>> s_hoppieCache = new List<Dictionary<string, string>>();
+        private static bool s_cacheLoaded = false;
 
-        private readonly Timer hoppieTimer = new Timer();
+        private readonly Timer _hoppieTimer = new Timer();
 
         /*
          * 
          * Initilise the ACARS
          *
         */
-        public void init( Main main, INotifier notifier, String logon ) {
-            Plugin = main;
-            Acars.notifier = notifier;
+        public void Init(Main main, INotifier notifier, string logon)
+        {
+            s_plugin = main;
+            s_notifier = notifier;
 
-            hoppieTimer.Elapsed += new ElapsedEventHandler(fetchHoppie);
-            hoppieTimer.Interval = 45 * 1000;
+            _hoppieTimer.Elapsed += new ElapsedEventHandler(FetchHoppie);
+            _hoppieTimer.Interval = 45 * 1000;
 
         }
 
@@ -34,10 +37,11 @@ namespace vPilot_Pushover {
          * Start the ACARS
          *
         */
-        public void start() {
-            hoppieTimer.Enabled = true;
-            Plugin.sendDebug("[ACARS] Starting ACARS");
-            fetchHoppie(null, null);
+        public void Start()
+        {
+            _hoppieTimer.Enabled = true;
+            s_plugin.sendDebug("[ACARS] Starting ACARS");
+            FetchHoppie(null, null);
         }
 
         /*
@@ -45,9 +49,10 @@ namespace vPilot_Pushover {
          * Stop the ACARS
          *
         */
-        public void stop() {
-            hoppieTimer.Enabled = false;
-            Plugin.sendDebug("[ACARS] Stopping ACARS");
+        public void Stop()
+        {
+            _hoppieTimer.Enabled = false;
+            s_plugin.sendDebug("[ACARS] Stopping ACARS");
         }
 
         /*
@@ -55,35 +60,46 @@ namespace vPilot_Pushover {
          * Fetch data from Hoppie API
          *
         */
-        private async void fetchHoppie( object source, ElapsedEventArgs e ) {
+        private async void FetchHoppie(object source, ElapsedEventArgs e)
+        {
             string baseUrl = "http://www.hoppie.nl/acars/system/connect.html";
-            string logon = Plugin.settingHoppieLogon;
-            string from = Plugin.connectedCallsign;
+            string logon = s_plugin.settingHoppieLogon;
+            string from = s_plugin.ConnectedCallsign;
             string type = "peek";
             string to = "SERVER";
 
-            if (Plugin.connectedCallsign != null) {
-                using (HttpClient httpClient = new HttpClient()) {
+            if (s_plugin.ConnectedCallsign != null)
+            {
+                using (HttpClient httpClient = new HttpClient())
+                {
 
                     // Build the complete URL with GET variables
                     string fullUrl = $"{baseUrl}?logon={logon}&from={from}&type={type}&to={to}";
-                    Plugin.sendDebug($"[ACARS] Fetching Hoppie data with callsign {from}");
+                    s_plugin.sendDebug($"[ACARS] Fetching Hoppie data with callsign {from}");
 
-                    try {
+                    try
+                    {
                         HttpResponseMessage response = await httpClient.GetAsync(fullUrl);
-                        if (response.IsSuccessStatusCode) {
+                        if (response.IsSuccessStatusCode)
+                        {
                             string responseContent = await response.Content.ReadAsStringAsync();
                             parseHoppie(responseContent);
-                        } else {
-                            Plugin.sendDebug($"[ACARS] HttpResponse request failed with status code: {response.StatusCode}");
                         }
-                    } catch (Exception ex) {
-                        Plugin.sendDebug($"[ACARS] An HttpResponse error occurred: {ex.Message}");
+                        else
+                        {
+                            s_plugin.sendDebug($"[ACARS] HttpResponse request failed with status code: {response.StatusCode}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        s_plugin.sendDebug($"[ACARS] An HttpResponse error occurred: {ex.Message}");
                     }
 
                 }
-            } else {
-                Plugin.sendDebug($"[ACARS] fetchHoppie aborted due to missing callsign");
+            }
+            else
+            {
+                s_plugin.sendDebug($"[ACARS] fetchHoppie aborted due to missing callsign");
             }
 
         }
@@ -93,12 +109,15 @@ namespace vPilot_Pushover {
          * Parse the Hoppie response
          *
         */
-        private void parseHoppie( String response ) {
+        private void ParseHoppie(string response)
+        {
 
-            Boolean statusOk = response.StartsWith("ok");
+            bool statusOk = response.StartsWith("ok");
 
-            if (statusOk) {
-                foreach (Match match in Regex.Matches(response, @"\{(\d+)\s(\w+)\s(\w+)\s\{([^\}]+)\}\}")) {
+            if (statusOk)
+            {
+                foreach (Match match in Regex.Matches(response, @"\{(\d+)\s(\w+)\s(\w+)\s\{([^\}]+)\}\}"))
+                {
                     // Map the Regex groups
                     string key = match.Groups[1].Value;
                     string from = match.Groups[2].Value;
@@ -110,7 +129,8 @@ namespace vPilot_Pushover {
                     message = Regex.Replace(message, @"@", "");
 
                     // Check if key doesnt' exist, then add it
-                    if (!hoppieCache.Exists(x => x["key"] == key)) {
+                    if (!s_hoppieCache.Exists(x => x["key"] == key))
+                    {
                         // Create a dictionary for the current block and add the key-value pairs
                         Dictionary<string, string> dataDict = new Dictionary<string, string>
                         {
@@ -121,24 +141,27 @@ namespace vPilot_Pushover {
                         };
 
                         // Add the dictionary to the list
-                        hoppieCache.Add(dataDict);
+                        s_hoppieCache.Add(dataDict);
 
                         // Send the message to Pushover
-                        if (cacheLoaded == true && message != "") {
-                            notifier.sendMessage(message, $"{from} ({type.ToUpper()})");
+                        if (s_cacheLoaded == true && message != "")
+                        {
+                            s_notifier.sendMessage(message, $"{from} ({type.ToUpper()})");
                         }
 
-                        Plugin.sendDebug($"[ACARS] Cached {key} with message: {message}");
+                        s_plugin.sendDebug($"[ACARS] Cached {key} with message: {message}");
 
                     }
 
 
                 }
 
-                cacheLoaded = true;
+                s_cacheLoaded = true;
 
-            } else {
-                Plugin.sendDebug("[ACARS] okCheck Error: " + response);
+            }
+            else
+            {
+                s_plugin.sendDebug("[ACARS] okCheck Error: " + response);
             }
 
         }

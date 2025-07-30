@@ -4,21 +4,24 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace vPilot_Pushover {
+namespace vPilot_Pushover
+{
 
-    public class NotifierConfig {
-        public string settingPushoverToken { get; set; }
-        public string settingPushoverUser { get; set; }
-        public string settingPushoverDevice { get; set; }
-        public string settingTelegramBotToken { get; set; }
-        public string settingTelegramChatId { get; set; }
-        public string settingGotifyUrl { get; set; }
-        public string settingGotifyToken { get; set; }
+    public class NotifierConfig
+    {
+        public string SettingPushoverToken { get; set; }
+        public string SettingPushoverUser { get; set; }
+        public string SettingPushoverDevice { get; set; }
+        public string SettingTelegramBotToken { get; set; }
+        public string SettingTelegramChatId { get; set; }
+        public string SettingGotifyUrl { get; set; }
+        public string SettingGotifyToken { get; set; }
     }
 
-    internal interface INotifier {
-        void init( NotifierConfig config );
-        void sendMessage( String message, String emoji = "", String title = "", int priority = 0 );
-        Boolean hasValidConfig();
+    internal interface INotifier
+    {
+        void Init(NotifierConfig config);
+        void SendMessage(string message, string emoji = "", string title = "", int priority = 0);
+        bool HasValidConfig();
     }
 }

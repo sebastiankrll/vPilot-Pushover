@@ -12,9 +12,9 @@ namespace vPilot_Pushover.Drivers
     {
 
         // Init
-        private static readonly HttpClient client = new HttpClient();
-        private String settingTelegramBotToken = null;
-        private String settingTelegramChatId = null;
+        private static readonly HttpClient s_client = new HttpClient();
+        private string _settingTelegramBotToken = null;
+        private string _settingTelegramChatId = null;
 
         // Event for received commands
         public event Action<string> OnCommandReceived;
@@ -24,10 +24,10 @@ namespace vPilot_Pushover.Drivers
          * Initilise the driver
          *
         */
-        public void init(NotifierConfig config)
+        public void Init(NotifierConfig config)
         {
-            this.settingTelegramBotToken = config.settingTelegramBotToken;
-            this.settingTelegramChatId = config.settingTelegramChatId;
+            _settingTelegramBotToken = config.SettingTelegramBotToken;
+            _settingTelegramChatId = config.SettingTelegramChatId;
         }
 
         /*
@@ -35,9 +35,9 @@ namespace vPilot_Pushover.Drivers
          * Validate the configuration
          *
         */
-        public Boolean hasValidConfig()
+        public bool HasValidConfig()
         {
-            if (this.settingTelegramBotToken == null || this.settingTelegramChatId == null)
+            if (_settingTelegramBotToken == null || _settingTelegramChatId == null)
             {
                 return false;
             }
@@ -49,7 +49,7 @@ namespace vPilot_Pushover.Drivers
          * Send Pushover message
          *
         */
-        public async void sendMessage(String text, String emoji = "", String title = "", int priority = 0)
+        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0)
         {
 
             // Construct the message for Telegram
@@ -58,17 +58,17 @@ namespace vPilot_Pushover.Drivers
             string telegramMessage = $"{emojiPart}{titlePart}{text}";
 
             // Prepare the Telegram API URL
-            string telegramApiUrl = $"https://api.telegram.org/bot{settingTelegramBotToken}/sendMessage";
+            string telegramApiUrl = $"https://api.telegram.org/bot{_settingTelegramBotToken}/sendMessage";
 
             // Create the form data for the POST request
             var values = new Dictionary<string, string>
             {
-                { "chat_id", settingTelegramChatId },
+                { "chat_id", _settingTelegramChatId },
                 { "text", telegramMessage }
             };
 
             // Send the POST request to Telegram
-            var response = await client.PostAsync(telegramApiUrl, new FormUrlEncodedContent(values));
+            var response = await s_client.PostAsync(telegramApiUrl, new FormUrlEncodedContent(values));
             var responseString = await response.Content.ReadAsStringAsync();
         }
 
@@ -79,13 +79,13 @@ namespace vPilot_Pushover.Drivers
         */
         public async Task StartLongPollingAsync()
         {
-            if (!hasValidConfig()) return;
+            if (!HasValidConfig()) return;
 
             int offset = 0;
             while (true)
             {
-                string url = $"https://api.telegram.org/bot{settingTelegramBotToken}/getUpdates?timeout=30&offset={offset}";
-                var response = await client.GetAsync(url);
+                string url = $"https://api.telegram.org/bot{_settingTelegramBotToken}/getUpdates?timeout=30&offset={offset}";
+                var response = await s_client.GetAsync(url);
                 var json = await response.Content.ReadAsStringAsync();
 
                 var updates = JObject.Parse(json)["result"];
