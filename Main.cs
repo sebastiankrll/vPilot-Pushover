@@ -8,8 +8,10 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
-namespace vPilot_Pushover {
-    public class Main : IPlugin {
+namespace vPilot_Pushover
+{
+    public class Main : IPlugin
+    {
 
         public static string version = "1.2.0";
 
@@ -22,6 +24,15 @@ namespace vPilot_Pushover {
 
         // Public variables
         public string connectedCallsign = null;
+        private enum PendingCommand
+        {
+            None,
+            AwaitingConnParams,
+            AwaitingChatParams
+        }
+        private PendingCommand pendingCommand = PendingCommand.None;
+        private string chatCallsign = null;
+        private bool relayAllRadio = false;
 
         // Settings
         private Boolean settingsLoaded = false;
@@ -43,60 +54,61 @@ namespace vPilot_Pushover {
         private String settingGotifyUrl = null;
         private String settingGotifyToken = null;
 
-        private enum PendingCommand
-        {
-            None,
-            AwaitingConnParams,
-            AwaitingMsgText,
-            AwaitingRespText
-        }
-        private PendingCommand pendingCommand = PendingCommand.None;
-        private string lastPrivateMessageCallsign = null;
-
         /*
          * 
          * Initilise the plugin
          *
         */
-        public void Initialize( IBroker broker ) {
+        public void Initialize(IBroker broker)
+        {
             vPilot = broker;
             loadSettings();
 
-            if (settingsLoaded) {
+            if (settingsLoaded)
+            {
 
                 // Load the correct notifier driver
-                if (settingDriver.ToLower() == "pushover") {
+                if (settingDriver.ToLower() == "pushover")
+                {
                     notifier = new Drivers.Pushover();
 
                     NotifierConfig config;
-                    config = new NotifierConfig {
+                    config = new NotifierConfig
+                    {
                         settingPushoverToken = settingPushoverToken,
                         settingPushoverUser = settingPushoverUser,
                         settingPushoverDevice = settingPushoverDevice
                     };
                     notifier.init(config);
-                    if(!notifier.hasValidConfig()) {
+                    if (!notifier.hasValidConfig())
+                    {
                         sendDebug("Pushover API key or user key not set. Check your vPilot-Pushover.ini");
                         return;
                     }
 
                     sendDebug("Driver set to Pushover");
-                } else if (settingDriver.ToLower() == "telegram") {
+                }
+                else if (settingDriver.ToLower() == "telegram")
+                {
                     notifier = new Drivers.Telegram();
 
                     NotifierConfig config;
-                    config = new NotifierConfig {
+                    config = new NotifierConfig
+                    {
                         settingTelegramBotToken = settingTelegramBotToken,
                         settingTelegramChatId = settingTelegramChatId
                     };
                     notifier.init(config);
-                    if (!notifier.hasValidConfig()) {
+                    if (!notifier.hasValidConfig())
+                    {
                         sendDebug("Telegram bot token or chat ID not set. Check your vPilot-Pushover.ini");
                         return;
                     }
 
                     sendDebug("Driver set to Telegram");
-                } else if (settingDriver.ToLower() == "gotify") {
+                }
+                else if (settingDriver.ToLower() == "gotify")
+                {
                     notifier = new Drivers.Gotify();
 
                     NotifierConfig config;
@@ -113,7 +125,9 @@ namespace vPilot_Pushover {
                     }
 
                     sendDebug("Driver set to Gotify");
-                } else {
+                }
+                else
+                {
                     sendDebug("Driver not set correctly. Check your vPilot-Pushover.ini");
                     return;
                 }
@@ -126,7 +140,8 @@ namespace vPilot_Pushover {
                 if (settingSelcalEnabled) vPilot.SelcalAlertReceived += onSelcalAlertReceivedHandler;
 
                 // Enable ACARS if Hoppie is enabled
-                if (settingHoppieEnabled) {
+                if (settingHoppieEnabled)
+                {
                     acars = new Acars();
                     acars.init(this, notifier, settingHoppieLogon);
                 }
@@ -139,9 +154,10 @@ namespace vPilot_Pushover {
                         if (settingSendEnabled)
                         {
                             respond(msg);
-                        } else
+                        }
+                        else
                         {
-                            notifier.sendMessage("Command sending is disabled. Please enable the 'Send' option in your vPilot-Pushover.ini to use this feature.");
+                            notifier.sendMessage("Command sending is disabled. Please enable the 'Send' option in your vPilot-Pushover.ini to use this feature.", "⛔");
                         }
                         sendDebug(msg);
                     };
@@ -159,12 +175,21 @@ namespace vPilot_Pushover {
                     });
                 }
 
-                notifier.sendMessage($"👋  Connected. Running version v{version}");
+                if (notifier is Drivers.Telegram)
+                {
+                    notifier.sendMessage($"Connected! Running version v{version}. Type /help to view available commands.", "👋");
+                }
+                else
+                {
+                    notifier.sendMessage($"Connected! Running version v{version}.", "👋");
+                }
                 sendDebug($"vPilot Pushover connected and enabled on v{version}");
 
                 updateChecker();
 
-            } else {
+            }
+            else
+            {
                 sendDebug("vPilot Pushover plugin failed to load. Check your vPilot-Pushover.ini");
             }
 
@@ -175,13 +200,14 @@ namespace vPilot_Pushover {
          * Send debug message to vPilot
          *
         */
-        public void sendDebug( String text ) {
+        public void sendDebug(String text)
+        {
             vPilot.PostDebugMessage(text);
         }
 
         /*
          * 
-         * Request network connection
+         * Request network connection (Telegram only)
          *
         */
         public void requestConnection(String callsign, String typeCode, String selcalCode)
@@ -189,28 +215,28 @@ namespace vPilot_Pushover {
             try
             {
                 vPilot.RequestConnect(callsign, typeCode, selcalCode);
-                notifier.sendMessage("🔄  Connecting ...");
+                notifier.sendMessage("Connecting ...", "⏳");
             }
             catch (SimNotReadyException ex)
             {
-                notifier.sendMessage("❌  Cannot connect: Simulator is not ready.");
+                notifier.sendMessage("Cannot connect: Simulator is not ready.", "❌");
                 sendDebug("Cannot connect: Simulator is not ready. " + ex.Message);
             }
             catch (AlreadyConnectedException ex)
             {
-                notifier.sendMessage("❌  Cannot connect: Already connected.");
+                notifier.sendMessage("Cannot connect: Already connected.", "❌");
                 sendDebug("Cannot connect: Already connected. " + ex.Message);
             }
             catch (Exception ex)
             {
-                notifier.sendMessage("❌  Cannot connect: Unknown error during connect.");
+                notifier.sendMessage("Cannot connect: Unknown error during connect.", "❌");
                 sendDebug("Unknown error during connect: " + ex.Message);
             }
         }
 
         /*
          * 
-         * Request network disconnection
+         * Request network disconnection (Telegram only)
          *
         */
         public void requestDisconnection()
@@ -218,45 +244,53 @@ namespace vPilot_Pushover {
             try
             {
                 vPilot.RequestDisconnect();
-                notifier.sendMessage("🔄  Disconnecting ...");
+                notifier.sendMessage("Disconnecting ...", "⏳");
             }
             catch (NotConnectedException ex)
             {
-                notifier.sendMessage("❌  Cannot disconnect: Not connected to the network.");
+                notifier.sendMessage("Cannot disconnect: Not connected to the network.", "❌");
                 sendDebug("Cannot disconnect: Not connected to the network. " + ex.Message);
             }
             catch (Exception ex)
             {
-                notifier.sendMessage("❌  Cannot disconnect: Unknown error during connect.");
+                notifier.sendMessage("Cannot disconnect: Unknown error during connect.", "❌");
                 sendDebug("Unknown error during disconnect: " + ex.Message);
             }
         }
 
         /*
          * 
-         * Send private message
+         * Send chat message (Telegram only)
          *
         */
-        public void sendPrivateMessage(String callsign, String message)
+        public void sendChatMessage(String message)
         {
             try
             {
-                vPilot.SendPrivateMessage(callsign, message);
-                notifier.sendMessage("📨  Message sent!");
+                if (chatCallsign.Trim().Equals("radio", StringComparison.OrdinalIgnoreCase))
+                {
+                    vPilot.SendRadioMessage(message);
+                    notifier.sendMessage("Broadcasted on radio!", "📻");
+                }
+                else
+                {
+                    vPilot.SendPrivateMessage(chatCallsign, message);
+                    notifier.sendMessage($"Sent to {chatCallsign}!", "💬");
+                }
             }
             catch (NotConnectedException ex)
             {
-                notifier.sendMessage("❌  Cannot send private message: Not connected to the network.");
+                notifier.sendMessage("Cannot send message: Not connected to the network.", "❌");
                 sendDebug("Cannot send private message: Not connected to the network. " + ex.Message);
             }
             catch (ArgumentException ex)
             {
-                notifier.sendMessage("❌  Cannot send private message: Invalid callsign or message.");
+                notifier.sendMessage("Cannot send message: Invalid callsign or message.", "❌");
                 sendDebug("Cannot send private message: Invalid callsign or message. " + ex.Message);
             }
             catch (Exception ex)
             {
-                notifier.sendMessage("❌  Cannot send private message: " + ex.Message);
+                notifier.sendMessage("Cannot send message: Unknown error.", "❌");
                 sendDebug("Error sending private message: " + ex.Message);
             }
         }
@@ -266,29 +300,34 @@ namespace vPilot_Pushover {
          * Hook: Network connected
          *
         */
-        private void onNetworkConnectedHandler( object sender, NetworkConnectedEventArgs e ) {
+        private void onNetworkConnectedHandler(object sender, NetworkConnectedEventArgs e)
+        {
             connectedCallsign = e.Callsign;
 
-            if (settingHoppieEnabled) {
+            if (settingHoppieEnabled)
+            {
                 acars.start();
             }
 
-            notifier.sendMessage("✅  Connected!", "", 1);
+            notifier.sendMessage($"Connected as {connectedCallsign}!", "🟢", "vPilot", 1);
         }
         /*
          * 
          * Hook: Network disconnected
          *
         */
-        private void onNetworkDisconnectedHandler( object sender, EventArgs e ) {
+        private void onNetworkDisconnectedHandler(object sender, EventArgs e)
+        {
             connectedCallsign = null;
 
-            if (settingHoppieEnabled) {
+            if (settingHoppieEnabled)
+            {
                 acars.stop();
             }
 
-            if (settingDisconnectEnabled) {
-                notifier.sendMessage("✅  Disconnected!", "", 1);
+            if (settingDisconnectEnabled)
+            {
+                notifier.sendMessage("Disconnected!", "🔴", "vPilot", 1);
             }
         }
 
@@ -297,11 +336,12 @@ namespace vPilot_Pushover {
          * Hook: Private Message
          *
         */
-        private void onPrivateMessageReceivedHandler( object sender, PrivateMessageReceivedEventArgs e ) {
+        private void onPrivateMessageReceivedHandler(object sender, PrivateMessageReceivedEventArgs e)
+        {
             string from = e.From;
             string message = e.Message;
-            lastPrivateMessageCallsign = from; // Store for /resp
-            notifier.sendMessage($"💬 {from}: {message}", "", 1);
+
+            notifier.sendMessage(message, "✉️", from, 1);
         }
 
         /*
@@ -309,14 +349,19 @@ namespace vPilot_Pushover {
          * Hook: Radio Message
          *
         */
-        private void onRadioMessageReceivedHandler( object sender, RadioMessageReceivedEventArgs e ) {
+        private void onRadioMessageReceivedHandler(object sender, RadioMessageReceivedEventArgs e)
+        {
             string from = e.From;
             string message = e.Message;
 
-            if (message.Contains(connectedCallsign)) {
-                notifier.sendMessage(message, from, 1);
+            if (message.Contains(connectedCallsign))
+            {
+                notifier.sendMessage(message, "📻❗", from, 1);
             }
-
+            else if (relayAllRadio && !message.Contains(connectedCallsign))
+            {
+                notifier.sendMessage(message, "📻", from, 1);
+            }
         }
 
         /*
@@ -324,21 +369,24 @@ namespace vPilot_Pushover {
          * Hook: SELCAL Message
          *
         */
-        private void onSelcalAlertReceivedHandler( object sender, SelcalAlertReceivedEventArgs e ) {
+        private void onSelcalAlertReceivedHandler(object sender, SelcalAlertReceivedEventArgs e)
+        {
             string from = e.From;
-            notifier.sendMessage("SELCAL Alert", from, 1);
+
+            notifier.sendMessage("SELCAL alert", "🔔", from, 1);
         }
-        
 
         /*
          * 
          * Load plugin settings
          *
         */
-        private void loadSettings() {
+        private void LoadSettings()
+        {
 
             RegistryKey registryKey = Registry.CurrentUser.OpenSubKey("Software\\vPilot");
-            if (registryKey != null) {
+            if (registryKey != null)
+            {
                 string vPilotPath = (string)registryKey.GetValue("Install_Dir");
                 string configFile = vPilotPath + "\\Plugins\\vPilot-Pushover.ini";
                 settingsFile = new IniFile(configFile);
@@ -361,14 +409,17 @@ namespace vPilot_Pushover {
                 settingGotifyToken = settingsFile.KeyExists("Token", "Gotify") ? settingsFile.Read("Token", "Gotify") : null;
 
                 // Validate values
-                if (settingHoppieEnabled && settingHoppieLogon == null) {
+                if (settingHoppieEnabled && settingHoppieLogon == null)
+                {
                     sendDebug("Hoppie logon code not set. Check your vPilot-Pushover.ini");
-                    notifier.sendMessage("Hoppie logon code not set. Check your vPilot-Pushover.ini");
+                    notifier.sendMessage("Hoppie logon code not set. Check your vPilot-Pushover.ini", "⚠️");
                 }
 
                 settingsLoaded = true;
 
-            } else {
+            }
+            else
+            {
                 sendDebug("Registry key not found. Is vPilot installed correctly?");
             }
 
@@ -379,30 +430,60 @@ namespace vPilot_Pushover {
          * Check if is update available
          *
         */
-        private async void updateChecker() {
+        private async void updateChecker()
+        {
 
-            using (HttpClient httpClient = new HttpClient()) {
-                try {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                try
+                {
                     HttpResponseMessage response = await httpClient.GetAsync("https://raw.githubusercontent.com/blt950/vPilot-Pushover/main/version.txt");
-                    if (response.IsSuccessStatusCode) {
+                    if (response.IsSuccessStatusCode)
+                    {
                         string responseContent = await response.Content.ReadAsStringAsync();
-                        if (responseContent != (version)) {
+                        if (responseContent != (version))
+                        {
                             await Task.Delay(5000);
                             sendDebug($"Update available. Latest version is v{responseContent}");
-                            notifier.sendMessage($"Update available. Latest version is v{responseContent}. Download newest version at https://blt950.com", "vPilot Pushover Plugin");
+                            notifier.sendMessage($"Update available. Latest version is v{responseContent}. Download newest version at https://blt950.com", "🚀");
                         }
-                    } else {
+                    }
+                    else
+                    {
                         sendDebug($"[Update Checker] HttpResponse request failed with status code: {response.StatusCode}");
                     }
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     sendDebug($"[Update Checker] An HttpResponse error occurred: {ex.Message}");
                 }
             }
 
         }
 
-        public void respond( String msg )
+        /*
+         * 
+         * Response handler  (Telegram only)
+         *
+        */
+        public void respond(String msg)
         {
+            // Cancel all pending commands
+            if (msg.StartsWith("/cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                if (pendingCommand == PendingCommand.None && !string.IsNullOrEmpty(chatCallsign))
+                {
+                    chatCallsign = null;
+                    notifier.sendMessage("Chat mode exited.", "💬");
+                }
+                else
+                {
+                    notifier.sendMessage("Command canceled!", "❌");
+                    pendingCommand = PendingCommand.None;
+                }
+                return;
+            }
+
             // Handle follow-up for multi-step commands
             if (pendingCommand == PendingCommand.AwaitingConnParams)
             {
@@ -417,79 +498,79 @@ namespace vPilot_Pushover {
                 }
                 else
                 {
-                    notifier.sendMessage("Invalid format. Enter: <callsign>:<typecode>:[<selcalcode>]");
+                    notifier.sendMessage("Invalid format. Enter: <callsign>:<typecode>:[<selcalcode>]", "⚠️");
                 }
                 return;
             }
-            else if (pendingCommand == PendingCommand.AwaitingMsgText)
+            else if (pendingCommand == PendingCommand.AwaitingChatParams)
             {
-                // Expecting format: CALLSIGN: message text
-                int colonIndex = msg.IndexOf(':');
-                if (colonIndex > 0)
+                string callsign = msg.Trim();
+                if (!string.IsNullOrEmpty(callsign))
                 {
-                    string callsign = msg.Substring(0, colonIndex).Trim();
-                    string message = msg.Substring(colonIndex + 1).Trim();
-                    if (!string.IsNullOrEmpty(callsign) && !string.IsNullOrEmpty(message))
-                    {
-                        sendPrivateMessage(callsign, message);
-                        pendingCommand = PendingCommand.None;
-                    }
-                    else
-                    {
-                        notifier.sendMessage("Invalid format. Enter: <callsign>: <message>");
-                    }
+                    notifier.sendMessage($"Now chatting with {callsign} ...", "💬");
+                    chatCallsign = callsign;
+                    pendingCommand = PendingCommand.None;
                 }
                 else
                 {
-                    notifier.sendMessage("Invalid format. Enter: <callsign>: <message>");
+                    notifier.sendMessage("Invalid format. Enter: <callsign>", "⚠️");
                 }
-                return;
-            }
-            else if (pendingCommand == PendingCommand.AwaitingRespText)
-            {
-                if (!string.IsNullOrEmpty(lastPrivateMessageCallsign))
-                {
-                    sendPrivateMessage(lastPrivateMessageCallsign, msg);
-                }
-                else
-                {
-                    notifier.sendMessage("❌  No previous private message to respond to.");
-                }
-                pendingCommand = PendingCommand.None;
                 return;
             }
 
             // Handle initial commands
-            if (msg.StartsWith("/conn", StringComparison.OrdinalIgnoreCase))
+            if (msg.StartsWith("/help", StringComparison.OrdinalIgnoreCase))
             {
-                notifier.sendMessage("Enter: <callsign>:<typecode>:[<selcalcode>]");
+                notifier.sendMessage(
+                    @"Need help? Here are the commands you can use:
+                    /conn - Connect to network
+                    /disc - Disconnect from network
+                    /chat - Open a chat
+                    /cancel - Cancel command or close chat
+                    /radio - Toggle radio listening
+                    /help - Show available commands
+                    
+                    Need help setting up Telegram bot commands? Check the full setup guide and command examples here:
+                    https://github.com/sebastiankrll/vPilot-Pushover/blob/main/telegram.md", "🆘"
+                );
+            }
+            else if (msg.StartsWith("/conn", StringComparison.OrdinalIgnoreCase))
+            {
+                notifier.sendMessage("Enter: <callsign>:<typecode>:[<selcalcode>]", "✏️");
                 pendingCommand = PendingCommand.AwaitingConnParams;
             }
             else if (msg.StartsWith("/disc", StringComparison.OrdinalIgnoreCase))
             {
                 requestDisconnection();
             }
-            else if (msg.StartsWith("/msg", StringComparison.OrdinalIgnoreCase))
+            else if (msg.StartsWith("/chat", StringComparison.OrdinalIgnoreCase))
             {
-                notifier.sendMessage("Enter: <callsign>: <message>");
-                pendingCommand = PendingCommand.AwaitingMsgText;
+                notifier.sendMessage("Enter: <callsign> or 'radio'", "✏️");
+                pendingCommand = PendingCommand.AwaitingChatParams;
             }
-            else if (msg.StartsWith("/resp", StringComparison.OrdinalIgnoreCase))
+            else if (msg.StartsWith("/radio", StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(lastPrivateMessageCallsign))
+                relayAllRadio = !relayAllRadio;
+                if (relayAllRadio)
                 {
-                    notifier.sendMessage($"Responding to {lastPrivateMessageCallsign} enter: <message>");
-                    pendingCommand = PendingCommand.AwaitingRespText;
+                    notifier.sendMessage("Radio listening enabled!", "🟢");
                 }
                 else
                 {
-                    notifier.sendMessage("❌  No previous private message to respond to.");
-                    pendingCommand = PendingCommand.None;
+                    notifier.sendMessage("Radio listening disabled!", "🔴");
                 }
+            }
+            else if (!msg.StartsWith("/", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(chatCallsign))
+            {
+                sendChatMessage(msg);
+            }
+            else if (msg.StartsWith("/", StringComparison.OrdinalIgnoreCase))
+            {
+                notifier.sendMessage("Unknown command.", "⛔");
             }
             else
             {
-                notifier.sendMessage("❗  Unknown command");
+                notifier.sendMessage("No chat open.", "⛔");
             }
         }
 

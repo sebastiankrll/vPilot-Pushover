@@ -46,7 +46,7 @@ namespace vPilot_Pushover.Drivers
          *
         */
 
-        public async void sendMessage(String text, String title = "", int priority = 0)
+        public async void sendMessage(String text, String emoji = "", String title = "", int priority = 0)
         {
             var values = new Dictionary<string, string>
             {

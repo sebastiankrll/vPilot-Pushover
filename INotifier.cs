@@ -18,7 +18,7 @@ namespace vPilot_Pushover {
 
     internal interface INotifier {
         void init( NotifierConfig config );
-        void sendMessage( String message, String title = "", int priority = 0 );
+        void sendMessage( String message, String emoji = "", String title = "", int priority = 0 );
         Boolean hasValidConfig();
     }
 }

@@ -6,8 +6,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
-namespace vPilot_Pushover.Drivers {
-    internal class Telegram : INotifier {
+namespace vPilot_Pushover.Drivers
+{
+    internal class Telegram : INotifier
+    {
 
         // Init
         private static readonly HttpClient client = new HttpClient();
@@ -22,7 +24,8 @@ namespace vPilot_Pushover.Drivers {
          * Initilise the driver
          *
         */
-        public void init( NotifierConfig config ) {
+        public void init(NotifierConfig config)
+        {
             this.settingTelegramBotToken = config.settingTelegramBotToken;
             this.settingTelegramChatId = config.settingTelegramChatId;
         }
@@ -32,8 +35,10 @@ namespace vPilot_Pushover.Drivers {
          * Validate the configuration
          *
         */
-        public Boolean hasValidConfig() {
-            if (this.settingTelegramBotToken == null || this.settingTelegramChatId == null) {
+        public Boolean hasValidConfig()
+        {
+            if (this.settingTelegramBotToken == null || this.settingTelegramChatId == null)
+            {
                 return false;
             }
             return true;
@@ -44,10 +49,14 @@ namespace vPilot_Pushover.Drivers {
          * Send Pushover message
          *
         */
-        public async void sendMessage( String text, String title = "", int priority = 0 ) {
+        public async void sendMessage(String text, String emoji = "", String title = "", int priority = 0)
+        {
 
             // Construct the message for Telegram
-            string telegramMessage = $"{title}\n\n{text}";
+            string emojiPart = string.IsNullOrEmpty(emoji) ? "" : $"{emoji}  ";
+            string titlePart = string.IsNullOrEmpty(title) ? "" : $"({title}): ";
+            string telegramMessage = $"{emojiPart}{titlePart}{text}";
+
             // Prepare the Telegram API URL
             string telegramApiUrl = $"https://api.telegram.org/bot{settingTelegramBotToken}/sendMessage";
 
