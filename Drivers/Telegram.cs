@@ -15,6 +15,7 @@ namespace vPilot_Pushover.Drivers
         private static readonly HttpClient s_client = new HttpClient();
         private string _settingTelegramBotToken = null;
         private string _settingTelegramChatId = null;
+        private int _lastPinnedMessageId = 0;
 
         // Event for received commands
         public event Action<string> OnCommandReceived;
@@ -49,9 +50,8 @@ namespace vPilot_Pushover.Drivers
          * Send Pushover message
          *
         */
-        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0)
+        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0, PinMode pinMode = PinMode.None)
         {
-
             // Construct the message for Telegram
             string emojiPart = string.IsNullOrEmpty(emoji) ? "" : $"{emoji}  ";
             string titlePart = string.IsNullOrEmpty(title) ? "" : $"({title}): ";
@@ -70,6 +70,55 @@ namespace vPilot_Pushover.Drivers
             // Send the POST request to Telegram
             var response = await s_client.PostAsync(telegramApiUrl, new FormUrlEncodedContent(values));
             var responseString = await response.Content.ReadAsStringAsync();
+
+            // Parse the message_id from the response
+            int? messageId = null;
+            try
+            {
+                var json = JObject.Parse(responseString);
+                messageId = (int?)json["result"]?["message_id"];
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+
+            // Pin or unpin if requested
+            if (pinMode == PinMode.Pin && messageId.HasValue)
+            {
+                // Unpin the last pinned message if there is one
+                if (_lastPinnedMessageId != 0)
+                {
+                    string unpinUrl = $"https://api.telegram.org/bot{_settingTelegramBotToken}/unpinChatMessage";
+                    var unpinValues = new Dictionary<string, string>
+                    {
+                        { "chat_id", _settingTelegramChatId },
+                        { "message_id", _lastPinnedMessageId.ToString() }
+                    };
+                    await s_client.PostAsync(unpinUrl, new FormUrlEncodedContent(unpinValues));
+                }
+
+                // Pin the new message
+                string pinUrl = $"https://api.telegram.org/bot{_settingTelegramBotToken}/pinChatMessage";
+                var pinValues = new Dictionary<string, string>
+                {
+                    { "chat_id", _settingTelegramChatId },
+                    { "message_id", messageId.Value.ToString() }
+                };
+                await s_client.PostAsync(pinUrl, new FormUrlEncodedContent(pinValues));
+                _lastPinnedMessageId = messageId.Value;
+            }
+            else if (pinMode == PinMode.Unpin && _lastPinnedMessageId != 0)
+            {
+                string unpinUrl = $"https://api.telegram.org/bot{_settingTelegramBotToken}/unpinChatMessage";
+                var unpinValues = new Dictionary<string, string>
+                {
+                    { "chat_id", _settingTelegramChatId },
+                    { "message_id", _lastPinnedMessageId.ToString() }
+                };
+                await s_client.PostAsync(unpinUrl, new FormUrlEncodedContent(unpinValues));
+                _lastPinnedMessageId = 0;
+            }
         }
 
         /*

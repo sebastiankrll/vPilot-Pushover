@@ -473,7 +473,7 @@ namespace vPilot_Pushover
                 if (_pendingCommand == PendingCommand.None && !string.IsNullOrEmpty(_chatCallsign))
                 {
                     _chatCallsign = null;
-                    _notifier.SendMessage("Chat mode exited.", "💬");
+                    _notifier.SendMessage("Chat mode exited.", "💬", pinMode: PinMode.Unpin);
                 }
                 else if (_pendingCommand != PendingCommand.None)
                 {
@@ -511,13 +511,13 @@ namespace vPilot_Pushover
                 string callsign = msg.Trim();
                 if (!string.IsNullOrEmpty(callsign) && callsign.Trim().Equals("radio", StringComparison.OrdinalIgnoreCase))
                 {
-                    _notifier.SendMessage($"Now chatting on radio frequency ...", "💬");
+                    _notifier.SendMessage($"Now chatting on radio frequency ...", "💬", pinMode: PinMode.Pin);
                     _chatCallsign = "radio";
                     _pendingCommand = PendingCommand.None;
                 }
                 else if (!string.IsNullOrEmpty(callsign) && callsign.Length >= 3)
                 {
-                    _notifier.SendMessage($"Now chatting with {callsign} ...", "💬");
+                    _notifier.SendMessage($"Now chatting with {callsign} ...", "💬", pinMode: PinMode.Pin);
                     _chatCallsign = callsign;
                     _pendingCommand = PendingCommand.None;
                 }

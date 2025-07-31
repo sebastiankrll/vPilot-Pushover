@@ -45,7 +45,7 @@ namespace vPilot_Pushover.Drivers
          * Send Pushover message
          *
         */
-        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0)
+        public async void SendMessage(string text, string emoji = "", string title = "", int priority = 0, PinMode pinMode = PinMode.None)
         {
             var values = new Dictionary<string, string>
             {

@@ -18,10 +18,18 @@ namespace vPilot_Pushover
         public string SettingGotifyToken { get; set; }
     }
 
+    // Enum for pinning messages (Telegram only)
+    public enum PinMode
+    {
+        None,
+        Pin,
+        Unpin
+    }
+
     internal interface INotifier
     {
         void Init(NotifierConfig config);
-        void SendMessage(string message, string emoji = "", string title = "", int priority = 0);
+        void SendMessage(string message, string emoji = "", string title = "", int priority = 0, PinMode pinMode = PinMode.None);
         bool HasValidConfig();
     }
 }
