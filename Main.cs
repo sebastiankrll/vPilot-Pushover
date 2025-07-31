@@ -475,9 +475,14 @@ namespace vPilot_Pushover
                     _chatCallsign = null;
                     _notifier.SendMessage("Chat mode exited.", "💬");
                 }
+                else if (_pendingCommand != PendingCommand.None)
+                {
+                    _notifier.SendMessage("Pending command canceled.", "❌");
+                    _pendingCommand = PendingCommand.None;
+                }
                 else
                 {
-                    _notifier.SendMessage("Command canceled!", "❌");
+                    _notifier.SendMessage("Nothing to cancel.", "❌");
                     _pendingCommand = PendingCommand.None;
                 }
                 return;
@@ -504,7 +509,13 @@ namespace vPilot_Pushover
             else if (_pendingCommand == PendingCommand.AwaitingChatParams)
             {
                 string callsign = msg.Trim();
-                if (!string.IsNullOrEmpty(callsign))
+                if (!string.IsNullOrEmpty(callsign) && callsign.Trim().Equals("radio", StringComparison.OrdinalIgnoreCase))
+                {
+                    _notifier.SendMessage($"Now chatting on radio frequency ...", "💬");
+                    _chatCallsign = "radio";
+                    _pendingCommand = PendingCommand.None;
+                }
+                else if (!string.IsNullOrEmpty(callsign) && callsign.Length >= 3)
                 {
                     _notifier.SendMessage($"Now chatting with {callsign} ...", "💬");
                     _chatCallsign = callsign;
@@ -521,16 +532,21 @@ namespace vPilot_Pushover
             if (msg.StartsWith("/help", StringComparison.OrdinalIgnoreCase))
             {
                 _notifier.SendMessage(
-                    @"Need help? Here are the commands you can use:
-                    /conn - Connect to network
-                    /disc - Disconnect from network
-                    /chat - Open a chat
-                    /cancel - Cancel command or close chat
-                    /radio - Toggle radio listening
-                    /help - Show available commands
-                    
-                    Need help setting up Telegram bot commands? Check the full setup guide and command examples here:
-                    https://github.com/sebastiankrll/vPilot-Pushover/blob/main/telegram.md", "🆘"
+                    string.Join("\n", new[]
+                    {
+                        "Need help? Here are the commands you can use:",
+                        "",
+                        "/conn - Connect to network",
+                        "/disc - Disconnect from network",
+                        "/chat - Open a chat",
+                        "/cancel - Cancel or close chat",
+                        "/radio - Toggle radio listening",
+                        "/help - Show available commands",
+                        "",
+                        "Need help setting up Telegram bot commands? Check the full setup guide and command examples here:",
+                        "https://github.com/sebastiankrll/vPilot-Pushover/blob/main/telegram.md"
+                    }),
+                    "🆘"
                 );
             }
             else if (msg.StartsWith("/conn", StringComparison.OrdinalIgnoreCase))

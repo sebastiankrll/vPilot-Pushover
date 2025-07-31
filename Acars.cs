@@ -40,7 +40,7 @@ namespace vPilot_Pushover
         public void Start()
         {
             _hoppieTimer.Enabled = true;
-            s_plugin.sendDebug("[ACARS] Starting ACARS");
+            s_plugin.SendDebug("[ACARS] Starting ACARS");
             FetchHoppie(null, null);
         }
 
@@ -52,7 +52,7 @@ namespace vPilot_Pushover
         public void Stop()
         {
             _hoppieTimer.Enabled = false;
-            s_plugin.sendDebug("[ACARS] Stopping ACARS");
+            s_plugin.SendDebug("[ACARS] Stopping ACARS");
         }
 
         /*
@@ -63,7 +63,7 @@ namespace vPilot_Pushover
         private async void FetchHoppie(object source, ElapsedEventArgs e)
         {
             string baseUrl = "http://www.hoppie.nl/acars/system/connect.html";
-            string logon = s_plugin.settingHoppieLogon;
+            string logon = s_plugin._settingHoppieLogon;
             string from = s_plugin.ConnectedCallsign;
             string type = "peek";
             string to = "SERVER";
@@ -75,7 +75,7 @@ namespace vPilot_Pushover
 
                     // Build the complete URL with GET variables
                     string fullUrl = $"{baseUrl}?logon={logon}&from={from}&type={type}&to={to}";
-                    s_plugin.sendDebug($"[ACARS] Fetching Hoppie data with callsign {from}");
+                    s_plugin.SendDebug($"[ACARS] Fetching Hoppie data with callsign {from}");
 
                     try
                     {
@@ -83,23 +83,23 @@ namespace vPilot_Pushover
                         if (response.IsSuccessStatusCode)
                         {
                             string responseContent = await response.Content.ReadAsStringAsync();
-                            parseHoppie(responseContent);
+                            ParseHoppie(responseContent);
                         }
                         else
                         {
-                            s_plugin.sendDebug($"[ACARS] HttpResponse request failed with status code: {response.StatusCode}");
+                            s_plugin.SendDebug($"[ACARS] HttpResponse request failed with status code: {response.StatusCode}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        s_plugin.sendDebug($"[ACARS] An HttpResponse error occurred: {ex.Message}");
+                        s_plugin.SendDebug($"[ACARS] An HttpResponse error occurred: {ex.Message}");
                     }
 
                 }
             }
             else
             {
-                s_plugin.sendDebug($"[ACARS] fetchHoppie aborted due to missing callsign");
+                s_plugin.SendDebug($"[ACARS] fetchHoppie aborted due to missing callsign");
             }
 
         }
@@ -146,10 +146,10 @@ namespace vPilot_Pushover
                         // Send the message to Pushover
                         if (s_cacheLoaded == true && message != "")
                         {
-                            s_notifier.sendMessage(message, $"{from} ({type.ToUpper()})");
+                            s_notifier.SendMessage(message, $"{from} ({type.ToUpper()})");
                         }
 
-                        s_plugin.sendDebug($"[ACARS] Cached {key} with message: {message}");
+                        s_plugin.SendDebug($"[ACARS] Cached {key} with message: {message}");
 
                     }
 
@@ -161,7 +161,7 @@ namespace vPilot_Pushover
             }
             else
             {
-                s_plugin.sendDebug("[ACARS] okCheck Error: " + response);
+                s_plugin.SendDebug("[ACARS] okCheck Error: " + response);
             }
 
         }

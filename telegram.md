@@ -40,12 +40,12 @@ https://vatsim-forums.nyc3.digitaloceanspaces.com/monthly_2020_08/Vatsim-social_
 7. Select `Edit Commands` and paste the commands below.
 8. Great, your bot is now fully configured! You can now either use the command menu or start typing `/` in your bot's chat to quickly access commands.
 ```
-/conn - Connect to network
-/disc - Disconnect from network
-/chat - Open a chat
-/cancel - Cancel command or close chat
-/radio - Toggle radio listening
-/help - Show available commands
+conn - Connect to network
+disc - Disconnect from network
+chat - Open a chat
+cancel - Cancel or close chat
+radio - Toggle radio listening
+help - Show available commands
 ```
 
 # How to use commands
